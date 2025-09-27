@@ -1,6 +1,6 @@
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
-const cloudscraper = require("cloudscraper");
+const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
@@ -40,7 +40,7 @@ const groupUsers = {};
 if (fs.existsSync(dataFile)) {
     const savedData = fs.readFileSync(dataFile);
     Object.assign(groupUsers, JSON.parse(savedData));
-    console.log("✅ Loaded saved group usernames:", groupUsers);
+    console.log("âœ… Loaded saved group usernames:", groupUsers);
 }
 
 // Helper to save usernames
@@ -64,12 +64,12 @@ const client = new Client({
 
 
 client.on("qr", qr => {
-    console.log("📱 Scan this QR code to login:");
+    console.log("ðŸ“± Scan this QR code to login:");
     qrcode.generate(qr, { small: true });
 });
 
 client.on("ready", () => {
-    console.log("✅ WhatsApp Bot is ready!");
+    console.log("âœ… WhatsApp Bot is ready!");
 });
 
 client.initialize();
@@ -114,13 +114,13 @@ if (!isGroup) return;
     // ------------------------
     if (isGroup && text.startsWith("/setuser ")) {
         if (!authorizedAdmins.includes(senderNumber)) {
-            return msg.reply("❌ You are not authorized to set username.");
+            return msg.reply("âŒ You are not authorized to set username.");
         }
         const username = text.replace("/setuser ", "").trim();
-        if (!username) return msg.reply("❌ Please provide a username. Usage: /setuser <username>");
+        if (!username) return msg.reply("âŒ Please provide a username. Usage: /setuser <username>");
         groupUsers[from] = username.toLowerCase();
         saveGroupUsers();
-        return msg.reply(`✅ Username for this group set to: ${username}`);
+        return msg.reply(`âœ… Username for this group set to: ${username}`);
     }
 
 
@@ -143,32 +143,29 @@ if (!groupUsers[from]) return;
 const refillRegex = /\brefill\b[:\s]*|refill/i;
 if (refillRegex.test(originalText)) {
     const refillIdsRaw = originalText.match(/\b\d+\b/g);
-    if (!refillIdsRaw || !refillIdsRaw.length) return msg.reply("⚠️ No order IDs found for refill.");
+    if (!refillIdsRaw || !refillIdsRaw.length) return msg.reply("âš ï¸ No order IDs found for refill.");
     const refillIds = [...new Set(refillIdsRaw.map(id => id.trim()))];
 
     const groupUsername = isGroup ? groupUsers[from] : null;
     if (isGroup && !groupUsername) {
-        return msg.reply("❌ No username set for this group. Admin must run /setuser <username>");
+        return msg.reply("âŒ No username set for this group. Admin must run /setuser <username>");
     }
     const usernameNormalized = groupUsername?.trim().toLowerCase();
 
     try {
-            const response = await cloudscraper.get({
-                uri: API_URL,
-                qs: {
-                    key: API_KEY,
-                    action: "getOrders-by-id",
-                    orders: refillIds.join(","),
-                    provider: 1
-                },
-                json: true
-            });
-
-            const data = response;
-            if (data.status !== "success" || !data.orders || !data.orders.length) {
-                return msg.reply("⚠️ No orders found for refill.");
+        const response = await axios.get(API_URL, {
+            params: {
+                key: API_KEY,
+                action: "getOrders-by-id",
+                orders: refillIds.join(","),
+                provider: 1
             }
+        });
 
+        const data = response.data;
+        if (data.status !== "success" || !data.orders || !data.orders.length) {
+            return msg.reply("âš ï¸ No orders found for refill.");
+        }
 
         // ------------------------
         // Group orders by result type
@@ -275,7 +272,7 @@ if (refillRegex.test(originalText)) {
         if (groupedReplies.noRefill.length) replyMessages.push(`${groupedReplies.noRefill.join(", ")} - No Refill Service`);
         if (groupedReplies.applied.length) replyMessages.push(`${groupedReplies.applied.join(", ")} - Applied For Refill`);
         if (groupedReplies.expired.length) replyMessages.push(`${groupedReplies.expired.join(", ")} - Refill expired`);
-        if (groupedReplies.notYourOrder.length) replyMessages.push(`❌ ${groupedReplies.notYourOrder.join(", ")} - Not your order`);
+        if (groupedReplies.notYourOrder.length) replyMessages.push(`âŒ ${groupedReplies.notYourOrder.join(", ")} - Not your order`);
 
         // Add blocked statuses individually
         for (const statusMsg in groupedReplies.statusBlocked) {
@@ -285,9 +282,9 @@ if (refillRegex.test(originalText)) {
         if (replyMessages.length) await msg.reply(replyMessages.join("\n"));
 
     } catch (err) {
-            console.error(err);
-            await msg.reply("⚠️ Something went wrong while processing refill.");
-        }
+        console.error(err.response?.data || err.message || err);
+        await msg.reply("âš ï¸ Something went wrong while processing refill.");
+    }
 
     return; // stop further processing for this message
 }
@@ -300,7 +297,7 @@ if (refillRegex.test(originalText)) {
 const fakeCompleteRegex = /\bfake complete\b[:\s]*|fake complete/i;
 if (fakeCompleteRegex.test(originalText)) {
     const fakeIdsRaw = originalText.match(/\b\d+\b/g);
-    if (!fakeIdsRaw || !fakeIdsRaw.length) return msg.reply("⚠️ No order IDs found for fake complete.");
+    if (!fakeIdsRaw || !fakeIdsRaw.length) return msg.reply("âš ï¸ No order IDs found for fake complete.");
     const fakeIds = [...new Set(fakeIdsRaw.map(id => id.trim()))];
 
     const groupUsername = isGroup ? groupUsers[from] : null;
@@ -310,21 +307,19 @@ if (fakeCompleteRegex.test(originalText)) {
     const usernameNormalized = groupUsername?.trim().toLowerCase();
 
     try {
-            const response = await cloudscraper.get({
-                uri: API_URL,
-                qs: {
-                    key: API_KEY,
-                    action: "getOrders-by-id",
-                    orders: fakeIds.join(","),
-                    provider: 1
-                },
-                json: true
-            });
-
-            const data = response;
-            if (data.status !== "success" || !data.orders || !data.orders.length) {
-                return msg.reply("⚠️ No orders found for fake complete.");
+        const response = await axios.get(API_URL, {
+            params: {
+                key: API_KEY,
+                action: "getOrders-by-id",
+                orders: fakeIds.join(","),
+                provider: 1
             }
+        });
+
+        const data = response.data;
+        if (data.status !== "success" || !data.orders || !data.orders.length) {
+            return msg.reply("âš ï¸ No orders found for fake complete.");
+        }
 
         // ------------------------
         // Group orders by result type (store IDs, not formatted strings)
@@ -377,7 +372,7 @@ if (fakeCompleteRegex.test(originalText)) {
                 groupedReplies.partial.push(o.id);
 
             } else {
-                // Any other unknown status — keep as formatted fallback line
+                // Any other unknown status â€” keep as formatted fallback line
                 groupedReplies.otherStatus.push(`${o.id} - Status: ${o.order_status}`);
             }
         }
@@ -418,7 +413,7 @@ if (fakeCompleteRegex.test(originalText)) {
             replyMessages.push(...groupedReplies.otherStatus);
         }
         if (groupedReplies.notYourOrder.length) {
-            replyMessages.push(`❌ ${groupedReplies.notYourOrder.join(", ")} - Not your order`);
+            replyMessages.push(`âŒ ${groupedReplies.notYourOrder.join(", ")} - Not your order`);
         }
 
         if (replyMessages.length) {
@@ -427,9 +422,9 @@ if (fakeCompleteRegex.test(originalText)) {
         }
 
     } catch (err) {
-            console.error(err);
-            await msg.reply("⚠️ Something went wrong while processing fake complete.");
-        }
+        console.error(err.response?.data || err.message || err);
+        await msg.reply("âš ï¸ Something went wrong while processing fake complete.");
+    }
 
   
     return; // stop further processing for this message
@@ -454,7 +449,7 @@ if (fakeCompleteRegex.test(originalText)) {
     // ------------------------
     const normalizedText = text.replace(/[^a-z0-9\s,]/gi, " "); // remove special chars
     const orderIdsRaw = normalizedText.match(/\b\d+\b/g);
-    if (!orderIdsRaw || !orderIdsRaw.length) return msg.reply("⚠️ No order IDs found in your message.");
+    if (!orderIdsRaw || !orderIdsRaw.length) return msg.reply("âš ï¸ No order IDs found in your message.");
     const orderIds = [...new Set(orderIdsRaw.map(id => id.trim()))]; // unique
 
     // ------------------------
@@ -462,25 +457,26 @@ if (fakeCompleteRegex.test(originalText)) {
     // ------------------------
     const groupUsername = isGroup ? groupUsers[from] : null;
     if (isGroup && !groupUsername) {
-        return msg.reply("❌ No username set for this group. Admin must run /setuser <username>");
+        return msg.reply("âŒ No username set for this group. Admin must run /setuser <username>");
     }
     const usernameNormalized = groupUsername?.trim().toLowerCase();
 
     try {
-        const response = await cloudscraper.get({
-            uri: API_URL,
-            qs: {
+        // ------------------------
+        // Fetch orders from API
+        // ------------------------
+        const response = await axios.get(API_URL, {
+            params: {
                 key: API_KEY,
                 action: "getOrders-by-id",
                 orders: orderIds.join(","),
                 provider: 1
-            },
-            json: true
+            }
         });
 
-        const data = response;
+        const data = response.data;
         if (data.status !== "success" || !data.orders || !data.orders.length) {
-            return msg.reply("⚠️ No orders found.");
+            return msg.reply("âš ï¸ No orders found.");
         }
 
         // ------------------------
@@ -540,13 +536,13 @@ if (fakeCompleteRegex.test(originalText)) {
             const actionText = action === "speed" ? "applied for speed up" : `applied for ${action}`;
             replyMessages.push(`${appliedOrders.join(", ")} - ${actionText}`);
         }
-        if (notAllowedOrders.length) replyMessages.push(`❌ ${notAllowedOrders.join(", ")} - not your order`);
+        if (notAllowedOrders.length) replyMessages.push(`âŒ ${notAllowedOrders.join(", ")} - not your order`);
 
         if (replyMessages.length) await msg.reply(replyMessages.join("\n"));
 
     } catch (err) {
-        console.error(err);
-        await msg.reply("⚠️ Something went wrong while processing orders.");
+        console.error(err.response?.data || err.message || err);
+        await msg.reply("âš ï¸ Something went wrong while processing orders.");
     }
 });
 
